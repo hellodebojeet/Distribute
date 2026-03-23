@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anthdm/foreverstore/metadata"
 	"github.com/anthdm/foreverstore/p2p"
 )
 
@@ -20,6 +21,7 @@ type FileServerOpts struct {
 	PathTransformFunc PathTransformFunc
 	Transport         p2p.Transport
 	BootstrapNodes    []string
+	MetadataAddr      string // Address of the metadata service
 }
 
 type FileServer struct {

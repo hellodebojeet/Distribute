@@ -1,12 +1,11 @@
 package replication
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/anthdm/foreverstore/metadata"
+	"github.com/hellodebojeet/Distribute/metadata"
 )
 
 // ReplicationManager handles chunk replication across nodes.

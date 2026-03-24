@@ -11,7 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/anthdm/foreverstore/metadata"
+	"github.com/hellodebojeet/Distribute/metadata"
 )
 
 func main() {

@@ -18,6 +18,7 @@ type MetadataClient interface {
 	ListNodes() ([]*NodeInfo, error)
 	GetChunkLocations(chunkID string) ([]string, error)
 	SaveChunkLocations(chunkID string, locations []string) error
+	MarkUnderReplicated(chunkID string, fileID string) error
 }
 
 // HTTPMetadataClient implements MetadataClient using HTTP.
@@ -240,6 +241,15 @@ func (c *HTTPMetadataClient) SaveChunkLocations(chunkID string, locations []stri
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("metadata service returned status %d", resp.StatusCode)
 	}
+	return nil
+}
+
+// MarkUnderReplicated calls a hypothetical endpoint to mark a chunk as under-replicated.
+// In a real implementation, this would trigger background repair processes.
+func (c *HTTPMetadataClient) MarkUnderReplicated(chunkID string, fileID string) error {
+	// For now, we'll just return nil as this would typically trigger background processes
+	// In a full implementation, we might call an endpoint like:
+	// POST /chunks/{chunkID}/mark-under-replicated with body {fileID: fileID}
 	return nil
 }
 

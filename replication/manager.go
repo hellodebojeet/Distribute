@@ -10,7 +10,7 @@ import (
 
 // ReplicationManager handles chunk replication across nodes.
 type ReplicationManager interface {
-	ReplicateChunk(chunkID string, data []byte, locations []string) error
+	ReplicateChunk(fileID string, chunkID string, data []byte, locations []string) error
 	GetReplicationStatus(chunkID string) (int, int, error) // actual, expected
 }
 
@@ -72,7 +72,7 @@ func NewReplicationManager(client metadata.MetadataClient, selector NodeSelector
 }
 
 // ReplicateChunk replicates a chunk to specified nodes.
-func (r *ReplicationManagerImpl) ReplicateChunk(chunkID string, data []byte, locations []string) error {
+func (r *ReplicationManagerImpl) ReplicateChunk(fileID string, chunkID string, data []byte, locations []string) error {
 	if len(locations) == 0 {
 		return fmt.Errorf("no locations specified for chunk %s", chunkID)
 	}
@@ -81,36 +81,57 @@ func (r *ReplicationManagerImpl) ReplicateChunk(chunkID string, data []byte, loc
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
+	// Retry configuration
+	maxRetries := r.maxRetries
+	retryDelay := time.Second
+
 	for _, nodeID := range locations {
-		wg.Add(1)
-		go func(nodeID string) {
-			defer wg.Done()
+		// Attempt replication with retries
+		success := false
+		for attempt := 0; attempt <= maxRetries && !success; attempt++ {
+			if attempt > 0 {
+				// Wait before retry
+				time.Sleep(retryDelay)
+				// Exponential backoff
+				retryDelay *= 2
+			}
 
 			// Get node info from metadata service
 			node, err := r.metadataClient.GetNode(nodeID)
 			if err != nil {
-				mu.Lock()
-				failedLocations = append(failedLocations, nodeID)
-				mu.Unlock()
-				return
+				if attempt == maxRetries {
+					mu.Lock()
+					failedLocations = append(failedLocations, nodeID)
+					mu.Unlock()
+				}
+				continue
+			}
+
+			// Check if node is alive
+			if !node.IsAlive {
+				if attempt == maxRetries {
+					mu.Lock()
+					failedLocations = append(failedLocations, nodeID)
+					mu.Unlock()
+				}
+				continue
 			}
 
 			// TODO: Implement actual RPC call to replicate chunk to this node
 			// This is a placeholder - in real implementation, you would send the chunk data to the peer
 			// using the existing p2p transport layer.
-			// For now, we'll just simulate success/failure based on node health.
+			//
+			// Placeholder: In a full implementation, we would:
+			// 1. Establish connection to the node using its address
+			// 2. Send a ReplicateChunk message with the chunkID and data
+			// 3. Wait for acknowledgment
+			//
+			// For this implementation, we'll mark as successful if node is alive
+			// The actual implementation would need to be integrated with the FileServer's transport
 
-			// Simulate replication with random success/failure for demo purposes
-			if node.IsAlive {
-				// In real implementation, send the chunk data to the node via RPC
-				// Example: nodeTransport.SendChunk(chunkID, data)
-			} else {
-				// Node is not alive - mark as failed
-				mu.Lock()
-				failedLocations = append(failedLocations, nodeID)
-				mu.Unlock()
-			}
-		}(nodeID)
+			// Simulate successful replication for now
+			success = true
+		}
 	}
 
 	wg.Wait()
@@ -118,13 +139,11 @@ func (r *ReplicationManagerImpl) ReplicateChunk(chunkID string, data []byte, loc
 	if len(failedLocations) > 0 {
 		// Update metadata to mark chunk as under-replicated
 		// This will trigger background repair process
-		// In production, you might want to implement retry logic here
+		if err := r.metadataClient.MarkUnderReplicated(chunkID, fileID); err != nil {
+			return fmt.Errorf("failed to replicate chunk %s to %d nodes and failed to mark as under-replicated: %v", chunkID, len(failedLocations), err)
+		}
 		return fmt.Errorf("failed to replicate chunk %s to %d nodes: %v", chunkID, len(failedLocations), failedLocations)
 	}
-
-	// Update metadata to mark chunk as successfully replicated
-	// In real implementation, you would call a method like:
-	// r.metadataClient.CommitChunkReplication(chunkID, locations)
 
 	return nil
 }

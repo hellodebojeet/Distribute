@@ -2,11 +2,20 @@ package metadata
 
 import (
 	"encoding/json"
+	"fmt"
+	"hash/fnv"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 )
+
+// hashString returns a hash of the input string
+func hashString(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
 
 // ErrNotFound is returned when a resource is not found
 var ErrNotFound = errorNotFound{}
@@ -158,6 +167,16 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate request
+	if req.FileID == "" {
+		http.Error(w, "file_id is required", http.StatusBadRequest)
+		return
+	}
+	if req.Size <= 0 {
+		http.Error(w, "size must be positive", http.StatusBadRequest)
+		return
+	}
+
 	// Create file metadata
 	fileMeta := &FileMetadata{
 		FileID:    req.FileID,
@@ -172,10 +191,81 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate chunk assignments (simplified)
-	chunks := make([]ChunkAssignment, 0)
-	// In a real implementation, this would split the file into chunks
-	// and assign them to nodes based on the replication factor
+	// Generate chunk assignments based on chunk size and replication factor
+	chunkSize := h.config.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 4 * 1024 * 1024 // Default 4MB
+	}
+
+	numChunks := int(req.Size / chunkSize)
+	if req.Size%chunkSize != 0 {
+		numChunks++
+	}
+
+	chunks := make([]ChunkAssignment, 0, numChunks)
+	nodes, err := h.store.ListNodes()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list nodes: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Filter only alive nodes
+	aliveNodes := make([]*NodeInfo, 0)
+	for _, node := range nodes {
+		if node.IsAlive {
+			aliveNodes = append(aliveNodes, node)
+		}
+	}
+
+	if len(aliveNodes) == 0 {
+		http.Error(w, "no alive nodes available for chunk allocation", http.StatusInternalServerError)
+		return
+	}
+
+	// Simple hash-based node selection for chunk allocation
+	for i := 0; i < numChunks; i++ {
+		chunkID := fmt.Sprintf("%s_%d", req.FileID, i)
+
+		// Determine primary node using hash
+		primaryIndex := int(hashString(chunkID)) % len(aliveNodes)
+		primary := aliveNodes[primaryIndex].NodeID
+
+		// Determine replicas (next N-1 nodes in ring)
+		replicas := make([]string, 0)
+		repFactor := h.config.ReplicationFactor
+		if repFactor <= 0 {
+			repFactor = 1
+		}
+		if repFactor > len(aliveNodes) {
+			repFactor = len(aliveNodes)
+		}
+
+		for j := 1; j < repFactor; j++ {
+			replicaIndex := (primaryIndex + j) % len(aliveNodes)
+			replicas = append(replicas, aliveNodes[replicaIndex].NodeID)
+		}
+
+		chunks = append(chunks, NewChunkAssignment(chunkID, primary, replicas))
+	}
+
+	// Initialize empty chunks in file metadata
+	fileMeta.Chunks = make([]ChunkMetadata, len(chunks))
+	for i, chunk := range chunks {
+		fileMeta.Chunks[i] = ChunkMetadata{
+			ChunkID:   chunk.ChunkID,
+			Index:     i,
+			Size:      0,  // Will be updated when chunk is committed
+			Checksum:  "", // Will be updated when chunk is committed
+			Version:   1,
+			Locations: []string{}, // Will be updated when chunk is committed
+		}
+	}
+
+	// Update file metadata with chunk info
+	if err := h.store.SaveFile(req.FileID, fileMeta); err != nil {
+		http.Error(w, fmt.Sprintf("failed to save file metadata: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	response := UploadInitResponse{
 		FileID:  req.FileID,
@@ -196,9 +286,59 @@ func (h *Handler) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate request
+	if req.FileID == "" {
+		http.Error(w, "file_id is required", http.StatusBadRequest)
+		return
+	}
+	if req.ChunkID == "" {
+		http.Error(w, "chunk_id is required", http.StatusBadRequest)
+		return
+	}
+	if len(req.Locations) == 0 {
+		http.Error(w, "locations must not be empty", http.StatusBadRequest)
+		return
+	}
+
 	// Save chunk locations
 	if err := h.store.SaveChunkLocations(req.ChunkID, req.Locations); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Update file metadata with chunk info
+	fileMeta, err := h.store.GetFile(req.FileID)
+	if err != nil {
+		if err == ErrNotFound {
+			http.Error(w, "file not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("failed to get file metadata: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Find the chunk index and update its metadata
+	chunkIndex := -1
+	for i, chunk := range fileMeta.Chunks {
+		if chunk.ChunkID == req.ChunkID {
+			chunkIndex = i
+			break
+		}
+	}
+
+	if chunkIndex == -1 {
+		http.Error(w, fmt.Sprintf("chunk %s not found in file %s", req.ChunkID, req.FileID), http.StatusBadRequest)
+		return
+	}
+
+	// Update chunk metadata (we don't have size/checksum here, but we can update locations and version)
+	fileMeta.Chunks[chunkIndex].Locations = req.Locations
+	fileMeta.Chunks[chunkIndex].Version = fileMeta.Chunks[chunkIndex].Version + 1
+	fileMeta.UpdatedAt = time.Now()
+
+	// Save updated file metadata
+	if err := h.store.SaveFile(req.FileID, fileMeta); err != nil {
+		http.Error(w, fmt.Sprintf("failed to save file metadata: %v", err), http.StatusInternalServerError)
 		return
 	}
 

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthdm/foreverstore/metadata"
 	"github.com/anthdm/foreverstore/p2p"
 )
 

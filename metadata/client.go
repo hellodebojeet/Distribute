@@ -177,6 +177,72 @@ func (c *HTTPMetadataClient) GetNode(nodeID string) (*NodeInfo, error) {
 	return &nodeInfo, nil
 }
 
+// ListNodes calls the /nodes endpoint.
+func (c *HTTPMetadataClient) ListNodes() ([]*NodeInfo, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/nodes")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("metadata service returned status %d", resp.StatusCode)
+	}
+
+	var nodes []*NodeInfo
+	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+		return nil, err
+	}
+	return nodes, nil
+}
+
+// GetChunkLocations calls the /chunks/{id}/locations endpoint.
+func (c *HTTPMetadataClient) GetChunkLocations(chunkID string) ([]string, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/chunks/" + chunkID + "/locations")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("metadata service returned status %d", resp.StatusCode)
+	}
+
+	var locations []string
+	if err := json.NewDecoder(resp.Body).Decode(&locations); err != nil {
+		return nil, err
+	}
+	return locations, nil
+}
+
+// SaveChunkLocations calls the /chunks/{id}/locations endpoint with PUT method.
+func (c *HTTPMetadataClient) SaveChunkLocations(chunkID string, locations []string) error {
+	reqBody, err := json.Marshal(locations)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, c.baseURL+"/chunks/"+chunkID+"/locations", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("metadata service returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // UploadInitRequest represents the request body for the UploadInit endpoint.
 type UploadInitRequest struct {
 	FileID string `json:"file_id"`

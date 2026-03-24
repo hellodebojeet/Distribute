@@ -1,8 +1,6 @@
 package metadata
 
-import (
-	"time"
-)
+import "time"
 
 // FileMetadata represents the metadata for a file
 type FileMetadata struct {
@@ -36,18 +34,39 @@ type NodeInfo struct {
 	Used          int64     `json:"used"`     // used storage in bytes
 }
 
-// ReplicationPlan describes where chunks should be stored
-type ReplicationPlan struct {
-	FileID  string            `json:"file_id"`
-	Chunks  []ChunkAssignment `json:"chunks"`
-	Version int64             `json:"version"`
-}
-
 // ChunkAssignment describes where a chunk should be stored
 type ChunkAssignment struct {
 	ChunkID  string   `json:"chunk_id"`
 	Primary  string   `json:"primary"`  // primary node ID
 	Replicas []string `json:"replicas"` // replica node IDs
+}
+
+// ReplicationStatus tracks the replication health of a chunk
+type ReplicationStatus int
+
+const (
+	ReplicationHealthy ReplicationStatus = iota
+	ReplicationUnderReplicated
+	ReplicationMissing
+	ReplicationFailed
+)
+
+// ReplicationInfo tracks replication status for a chunk
+type ReplicationInfo struct {
+	ChunkID     string            `json:"chunk_id"`
+	FileID      string            `json:"file_id"`
+	Status      ReplicationStatus `json:"status"`
+	Locations   []string          `json:"locations"`
+	Version     int64             `json:"version"`
+	LastChecked time.Time         `json:"last_checked"`
+}
+
+type Config struct {
+	ReplicationFactor   int           `json:"replication_factor"`
+	ChunkSize           int64         `json:"chunk_size"` // target chunk size in bytes
+	PersistencePath     string        `json:"persistence_path"`
+	PersistenceInterval time.Duration `json:"persistence_interval"`
+	NodeTimeout         time.Duration `json:"node_timeout"` // time after which node is considered dead
 }
 
 // MetadataStore defines the interface for metadata persistence
@@ -61,13 +80,7 @@ type MetadataStore interface {
 	ListNodes() ([]*NodeInfo, error)
 	SaveChunkLocations(chunkID string, locations []string) error
 	GetChunkLocations(chunkID string) ([]string, error)
-}
-
-// Config holds configuration for the metadata service
-type Config struct {
-	ReplicationFactor   int           `json:"replication_factor"`
-	ChunkSize           int64         `json:"chunk_size"` // target chunk size in bytes
-	PersistencePath     string        `json:"persistence_path"`
-	PersistenceInterval time.Duration `json:"persistence_interval"`
-	NodeTimeout         time.Duration `json:"node_timeout"` // time after which node is considered dead
+	UpdateChunkReplicationStatus(chunkID, fileID string, newLocations []string) error
+	MarkUnderReplicated(chunkID, fileID string) error
+	UpdateReplicationStatus(info ReplicationInfo) error
 }

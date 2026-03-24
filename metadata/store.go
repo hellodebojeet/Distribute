@@ -162,6 +162,27 @@ func (s *InMemoryMetadataStore) GetChunkLocations(chunkID string) ([]string, err
 	return nil, ErrNotFound
 }
 
+// UpdateChunkReplicationStatus updates the replication status for a chunk
+func (s *InMemoryMetadataStore) UpdateChunkReplicationStatus(chunkID, fileID string, newLocations []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.chunkLocs[chunkID] = newLocations
+	return nil
+}
+
+// MarkUnderReplicated marks a chunk as under-replicated
+func (s *InMemoryMetadataStore) MarkUnderReplicated(chunkID, fileID string) error {
+	// In a real implementation, this would trigger background repair
+	return nil
+}
+
+// UpdateReplicationStatus updates the replication info for a chunk
+func (s *InMemoryMetadataStore) UpdateReplicationStatus(info ReplicationInfo) error {
+	// In a real implementation, this would store the replication status
+	return nil
+}
+
 // persistenceLoop periodically saves data to disk
 func (s *InMemoryMetadataStore) persistenceLoop() {
 	for {

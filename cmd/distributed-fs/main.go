@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/hellodebojeet/Distribute/internal/mcp"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/spf13/cobra"
 )
 
@@ -97,14 +96,7 @@ func startNode(listenAddr string, bootstrapNodes []string) {
 	fmt.Printf("Node ID: %s\n", node.ID())
 
 	// Create DHT for peer discovery
-	// Type assert to get the underlying libp2pNode to access the host
-	libp2pNode, ok := node.(*mcp.Libp2pNode)
-	if !ok {
-		fmt.Printf("Failed to type assert node to Libp2pNode\n")
-		return
-	}
-
-	dht, err := mcp.NewKadDHT(libp2pNode.GetHost())
+	dht, err := mcp.NewKadDHT(node.GetHost())
 	if err != nil {
 		fmt.Printf("Failed to create DHT: %v\n", err)
 		return
@@ -126,12 +118,11 @@ func startNode(listenAddr string, bootstrapNodes []string) {
 		}
 	}
 
-	// Set up protocol handlers
-	node.SetStreamHandler("/distributed-fs/1.0.0", func(stream network.Stream) {
-		// Handle incoming stream
-		fmt.Println("New stream received")
-		// In a real implementation, we'd handle the stream properly
-		stream.Close()
+	// Set up protocol handlers using the P2PNode interface
+	node.RegisterHandler("/distributed-fs/1.0.0", func(from string, msg []byte) error {
+		// Handle incoming message
+		fmt.Printf("Received message from %s: %s\n", from, string(msg))
+		return nil
 	})
 
 	// Wait for shutdown signal

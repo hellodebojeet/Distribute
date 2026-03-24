@@ -35,23 +35,22 @@ type Link struct {
 type SimpleMerkleDAG struct {
 	nodes map[cid.Cid][]byte
 	links map[cid.Cid]map[string]cid.Cid
+	ca    ContentAddresser
 }
 
 // NewSimpleMerkleDAG creates a new in-memory Merkle DAG.
-func NewSimpleMerkleDAG() MerkleDAG {
+func NewSimpleMerkleDAG(ca ContentAddresser) MerkleDAG {
 	return &SimpleMerkleDAG{
 		nodes: make(map[cid.Cid][]byte),
 		links: make(map[cid.Cid]map[string]cid.Cid),
+		ca:    ca,
 	}
 }
 
 // AddNode adds a node to the DAG and returns its CID.
 func (d *SimpleMerkleDAG) AddNode(ctx context.Context, nodeData []byte) (cid.Cid, error) {
-	// In a real implementation, we would use a content addresser to generate the CID
-	// For now, we'll create a simple CID (this is just for demonstration)
-	// TODO: Replace with proper content addressing
-	id := len(d.nodes)
-	c := cid.NewCidV1(cid.Raw, []byte{byte(id)})
+	// Use content addresser to generate CID from node data
+	c := d.ca.Hash(nodeData)
 
 	d.nodes[c] = nodeData
 	return c, nil

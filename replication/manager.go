@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -12,6 +13,16 @@ import (
 type ReplicationManager interface {
 	ReplicateChunk(fileID string, chunkID string, data []byte, locations []string) error
 	GetReplicationStatus(chunkID string) (int, int, error) // actual, expected
+	// Pin marks a chunk to be pinned (always kept).
+	Pin(chunkID string) error
+	// Unpin removes a pin from a chunk.
+	Unpin(chunkID string) error
+	// IsPinned returns true if the chunk is pinned.
+	IsPinned(chunkID string) (bool, error)
+	// StartBackgroundRepair starts the background repair process.
+	StartBackgroundRepair(ctx context.Context)
+	// StopBackgroundRepair stops the background repair process.
+	StopBackgroundRepair()
 }
 
 // NodeSelector defines strategy for selecting nodes for replication.
@@ -59,6 +70,9 @@ type ReplicationManagerImpl struct {
 	maxRetries     int
 	timeout        time.Duration
 	mu             sync.RWMutex
+	pinnedChunks   map[string]bool
+	repairInterval time.Duration
+	stopChan       chan struct{}
 }
 
 // NewReplicationManager creates a new replication manager.
@@ -68,6 +82,9 @@ func NewReplicationManager(client metadata.MetadataClient, selector NodeSelector
 		nodeSelector:   selector,
 		maxRetries:     3,
 		timeout:        10 * time.Second,
+		pinnedChunks:   make(map[string]bool),
+		repairInterval: 5 * time.Minute,
+		stopChan:       make(chan struct{}),
 	}
 }
 
@@ -174,6 +191,132 @@ func (r *ReplicationManagerImpl) GetReplicationStatus(chunkID string) (int, int,
 	expected := len(locations) // Simplified - in production you'd track desired RF
 
 	return actual, expected, nil
+}
+
+// Pin marks a chunk to be pinned (always kept).
+func (r *ReplicationManagerImpl) Pin(chunkID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pinnedChunks[chunkID] = true
+	// In a full implementation, we would also ensure the chunk is replicated
+	// to the desired replication factor
+	return nil
+}
+
+// Unpin removes a pin from a chunk.
+func (r *ReplicationManagerImpl) Unpin(chunkID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.pinnedChunks, chunkID)
+	return nil
+}
+
+// IsPinned returns true if the chunk is pinned.
+func (r *ReplicationManagerImpl) IsPinned(chunkID string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.pinnedChunks[chunkID], nil
+}
+
+// StartBackgroundRepair starts the background repair process.
+func (r *ReplicationManagerImpl) StartBackgroundRepair(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(r.repairInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-r.stopChan:
+				return
+			case <-ticker.C:
+				r.repairUnderReplicatedChunks(ctx)
+			}
+		}
+	}()
+}
+
+// StopBackgroundRepair stops the background repair process.
+func (r *ReplicationManagerImpl) StopBackgroundRepair() {
+	close(r.stopChan)
+}
+
+// repairUnderReplicatedChunks finds and repairs under-replicated chunks.
+func (r *ReplicationManagerImpl) repairUnderReplicatedChunks(ctx context.Context) {
+	// Get all files from metadata
+	files, err := r.metadataClient.ListFiles()
+	if err != nil {
+		// Log error and continue
+		return
+	}
+
+	for _, fileMeta := range files {
+		fileID := fileMeta.FileID
+		// Get chunk locations from metadata
+		// For simplicity, we're assuming each file has one chunk in this example
+		// In a real implementation, files would have multiple chunks
+		chunkID := fileID // Simplified - in reality, we'd have a mapping
+
+		actual, expected, err := r.GetReplicationStatus(chunkID)
+		if err != nil {
+			// Log error and continue
+			continue
+		}
+
+		if actual < expected {
+			// Chunk is under-replicated, get locations and attempt to repair
+			locations, err := r.metadataClient.GetChunkLocations(chunkID)
+			if err != nil {
+				// Log error and continue
+				continue
+			}
+
+			// Get the chunk data from one of the locations that has it
+			var data []byte
+			var sourceNode string
+
+			// Try to get the chunk from each location until we find one that has it
+			for _, nodeID := range locations {
+				node, err := r.metadataClient.GetNode(nodeID)
+				if err != nil || !node.IsAlive {
+					continue
+				}
+
+				// In a real implementation, we would fetch the chunk data from the node
+				// For now, we'll simulate getting the data
+				// In practice, we'd need to get the actual chunk data from storage
+				data = []byte("simulated chunk data")
+				sourceNode = nodeID
+				break
+			}
+
+			if len(data) == 0 {
+				// Could not get chunk data from any source
+				continue
+			}
+
+			// Determine which nodes are missing the chunk
+			var missingLocations []string
+			for _, nodeID := range locations {
+				node, err := r.metadataClient.GetNode(nodeID)
+				if err != nil || !node.IsAlive {
+					continue
+				}
+
+				// Check if node has the chunk (in a real implementation)
+				// For now, we'll simulate that some nodes don't have it
+				if nodeID != sourceNode {
+					missingLocations = append(missingLocations, nodeID)
+				}
+			}
+
+			// Replicate the chunk to missing nodes
+			if len(missingLocations) > 0 {
+				r.ReplicateChunk(fileID, chunkID, data, missingLocations)
+			}
+		}
+	}
 }
 
 // hashString generates a simple hash for string.

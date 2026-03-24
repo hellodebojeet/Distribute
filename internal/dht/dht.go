@@ -8,7 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+	routed "github.com/libp2p/go-libp2p/p2p/host/routed"
 )
 
 // DHT represents a Kademlia Distributed Hash Table interface
@@ -96,7 +96,7 @@ func NewRoutedDHT(h host.Host, cfg DHTConfig) (host.Host, DHT, error) {
 
 	// Create routed host
 	dWrapper := d.(*kadDHTWrapper)
-	routedHost := routedhost.Wrap(h, dWrapper.dht)
+	routedHost := routed.Wrap(h, dWrapper.dht)
 
 	return routedHost, d, nil
 }

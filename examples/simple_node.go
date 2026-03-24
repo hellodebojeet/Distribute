@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,10 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hellodebojeet/Distribute/internal/dht"
 	"github.com/hellodebojeet/Distribute/internal/observability"
 	"github.com/hellodebojeet/Distribute/internal/p2p"
-	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
@@ -39,27 +36,6 @@ func main() {
 		observability.StringField("id", host.ID().String()),
 		observability.StringField("addrs", fmt.Sprintf("%v", host.Addrs())),
 	)
-
-	// Create DHT
-	logger.Info("creating DHT")
-	dhtConfig := dht.DHTConfig{
-		Host: host,
-		Mode: kaddht.ModeAutoServer,
-	}
-	d, err := dht.NewDHT(dhtConfig)
-	if err != nil {
-		logger.Fatal("failed to create DHT", observability.ErrorField(err))
-	}
-	defer d.Close()
-
-	// Bootstrap DHT
-	logger.Info("bootstrapping DHT")
-	ctx := context.Background()
-	if err := d.Bootstrap(ctx); err != nil {
-		logger.Error("bootstrap failed", observability.ErrorField(err))
-	} else {
-		logger.Info("DHT bootstrapped successfully")
-	}
 
 	// Set up stream handler
 	logger.Info("setting up stream handlers")
@@ -99,8 +75,10 @@ func main() {
 	logger.Info("shutting down node")
 
 	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	time.AfterFunc(10*time.Second, func() {
+		logger.Error("shutdown timeout exceeded")
+		os.Exit(1)
+	})
 
 	if err := metrics.StopServer(); err != nil {
 		logger.Error("failed to stop metrics server", observability.ErrorField(err))

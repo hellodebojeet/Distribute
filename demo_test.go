@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"testing"
 )
 
-func TestSimpleDemo() {
+func TestSimpleDemo(t *testing.T) {
 	fmt.Println("🚀 Starting Simple Distributed Filesystem Demo...")
 
 	// Clean up any existing demo directories

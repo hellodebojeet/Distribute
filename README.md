@@ -329,27 +329,6 @@ Structured JSON logs with configurable verbosity:
 
 Focus areas: protocol implementations, performance optimization, testing infrastructure.
 
-## License
-
-MIT License - see LICENSE file for details.
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Node 3001     │    │   Node 3002     │    │   Node 3003     │
-│                 │    │                 │    │                 │
-│ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│ │ FileServer  │ │    │ │ FileServer  │ │    │ │ FileServer  │ │
-│ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
-│ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│ │   Storage   │ │    │ │   Storage   │ │    │ │   Storage   │ │
-│ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-          │                       │                       │
-          └───────────────────────┼───────────────────────┘
-                                  │
-                     ┌─────────────────┐
-                     │ Metadata Service│
-                     │   (HTTP:8080)   │
-                     └─────────────────┘
-```
 
 ### Core Components
 
@@ -471,7 +450,7 @@ See `k8s/` directory for production-ready manifests including:
 - Secrets for encryption keys
 - HorizontalPodAutoscaler for scaling
 
-## 📊 Monitoring & Observability
+## Monitoring & Observability
 
 ### Metrics (Prometheus Endpoint: `:9090/metrics`)
 
@@ -504,7 +483,7 @@ Logs include trace IDs for request correlation across services.
 | `GET /ready` | Readiness probe |
 | `GET /metrics` | Prometheus metrics |
 
-## ⚡ Performance Benchmarks
+## Performance Benchmarks
 
 ### Throughput (3-node cluster, 1GB files)
 
@@ -521,7 +500,7 @@ Logs include trace IDs for request correlation across services.
 - Sub-linear latency growth with cluster size
 - Metadata service handles 10K+ files with <10ms response time
 
-## 🧪 Testing Strategy
+## Testing Strategy
 
 ### Unit Tests
 
@@ -549,7 +528,7 @@ make test-integration
 make test-chaos
 ```
 
-## 🔒 Security Features
+##  Security Features
 
 ### Authentication & Authorization
 
@@ -571,7 +550,7 @@ make test-chaos
 - File access audit trail
 - Security event detection and alerting
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
@@ -601,11 +580,7 @@ make test
 - Enforces `gofmt` formatting
 - Requires unit tests for new functionality
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Inspired by Google File System (GFS) and Amazon S3
 - Built with Go's excellent standard library and ecosystem

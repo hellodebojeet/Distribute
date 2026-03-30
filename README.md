@@ -79,7 +79,7 @@ Every piece of data is identified by its content hash, not its location. A file 
 
 - Intrinsic deduplication (identical data shares the same CID)
 - Verifiable integrity (hash verification on retrieval)
-- Location independence (data can move without breaking references)
+- Location inendence (data can move without breaking references)
 
 ### Merkle DAG
 
@@ -116,7 +116,7 @@ Nodes can "pin" CIDs, ensuring local retention and network availability. The rep
 - Tracks which peers hold which blocks
 - Maintains target replication factors
 - Initiates background replication when availability drops
-- Handles node departure gracefully with re-replication
+- Handles node arture gracefully with re-replication
 
 ## NFT Compatibility
 
@@ -298,9 +298,9 @@ Structured JSON logs with configurable verbosity:
 
 **Why Eventual Consistency**: CAP theorem dictates consistency/availability trade-off in network partitions. Prioritized availability since data is immutable and can be reconciled.
 
-**Gateway vs Native**: HTTP gateway bridges existing infrastructure but adds latency and single-point-of-failure risk. Production deployments should use direct libp2p where possible.
+**Gateway vs Native**: HTTP gateway bridges existing infrastructure but adds latency and single-point-of-failure risk. Production loyments should use direct libp2p where possible.
 
-**FlatFS vs Badger**: FlatFS (file-per-block) for simplicity and portability; Badger for high-throughput scenarios. Configurable per deployment.
+**FlatFS vs Badger**: FlatFS (file-per-block) for simplicity and portability; Badger for high-throughput scenarios. Configurable per loyment.
 
 ## Roadmap
 
@@ -338,13 +338,13 @@ Focus areas: protocol implementations, performance optimization, testing infrast
 4. **P2P Transport Layer**: Reliable TCP-based communication between nodes
 5. **Storage Layer**: Content-addressable local storage with encryption
 6. **Security Layer**: Authentication, authorization, and encryption
-
-## 🛠️ Getting Started
+   
+##  Getting Started
 
 ### Prerequisites
 
 - Go 1.20+
-- Docker (optional, for containerized deployment)
+- Docker (optional, for containerized loyment)
 - Make
 
 ### Quick Start
@@ -354,7 +354,7 @@ Focus areas: protocol implementations, performance optimization, testing infrast
 git clone https://github.com/your-org/distributed-filesystem.git
 cd distributed-filesystem
 
-# Install dependencies
+# Install endencies
 go mod download
 
 # Start the metadata service
@@ -378,7 +378,7 @@ This will start a 3-node network and demonstrate basic file operations.
 | `make lint` | Run code linters |
 | `make clean` | Remove build artifacts |
 
-## 📡 API Documentation
+## API Documentation
 
 ### Metadata Service (Port 8080)
 
@@ -418,7 +418,7 @@ All endpoints return JSON and standard HTTP status codes.
 
 Internal communication between nodes uses gRPC for efficient binary serialization.
 
-## 🐳 Deployment Guide
+## Deployment Guide
 
 ### Docker Deployment
 
